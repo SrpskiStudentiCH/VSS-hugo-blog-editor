@@ -177,5 +177,32 @@ class TestCorsAndHeaders(unittest.TestCase):
             self.assertNotIn("GITHUB_TOKEN", body)
 
 
+class TestFrontendCaching(unittest.TestCase):
+    """A stale shell must not pin an old stylesheet, and a missing asset must
+    fail instead of silently returning index.html."""
+
+    def setUp(self):
+        self.client = app_module.app.test_client()
+
+    def test_spa_shell_is_revalidated(self):
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("no-cache", resp.headers.get("Cache-Control", ""))
+
+    def test_missing_asset_is_not_answered_with_the_shell(self):
+        resp = self.client.get("/static/css/does-not-exist.css")
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.get_data(), b"")
+
+    def test_hashed_asset_is_cacheable(self):
+        css_dir = Path(app_module.FRONTEND_BUILD) / "static" / "css"
+        bundles = sorted(css_dir.glob("main.*.css")) if css_dir.is_dir() else []
+        if not bundles:
+            self.skipTest("frontend/build has no CSS bundle")
+        resp = self.client.get("/static/css/" + bundles[0].name)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("immutable", resp.headers.get("Cache-Control", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

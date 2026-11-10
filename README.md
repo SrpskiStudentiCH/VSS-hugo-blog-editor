@@ -140,6 +140,13 @@ build **commit-ovan** — posle svake izmene frontenda pokreni
 commituju). Bez build-a Flask vraća samo status stranicu „Frontend nije
 pronađen“.
 
+Asset-i iz build-a imaju hash u imenu, pa se serviraju sa
+`Cache-Control: immutable`; `index.html` se uvek revalidira (`no-cache`), a
+nepostojeći `.css`/`.js`/font vraća `404` (nikad `index.html`). Tako novi
+deploy uvek donese i novi CSS/JS, a browser ne može da „zaglavi“ na starom
+stylesheet-u. Ako se posle izmene i dalje vidi stari izgled, uradi jedan hard
+refresh (`Ctrl+Shift+R`) — stari `index.html` je bio keširan pre ove izmene.
+
 **Zašto je deploy pao sa `ModuleNotFoundError: No module named
 'your_application'`?** Render tada pokreće svoju *default* start komandu
 (`gunicorn your_application.wsgi`) jer Start Command nije podešen. `Procfile`

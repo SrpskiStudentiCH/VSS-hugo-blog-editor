@@ -86,6 +86,12 @@ FRONTEND_BUILD = os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "build")
 )
 
+# Build assets carry a content hash in their name, so they can be cached
+# forever; the SPA shell must always be revalidated, otherwise a browser keeps
+# using an old index.html that points at asset names of a previous build.
+ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+SHELL_CACHE_CONTROL = "no-cache, must-revalidate"
+
 LOCAL_SAVE_DIR = "content/posts"  # legacy local mirror
 IMAGES_DIR = "images/blogs"  # legacy local mirror
 os.makedirs(LOCAL_SAVE_DIR, exist_ok=True)
@@ -143,6 +149,18 @@ def _login_throttled(client_ip):
     return len(_LOGIN_ATTEMPTS.get(client_ip, ())) >= _LOGIN_MAX_ATTEMPTS
 
 
+def _build_response(path, cache_control):
+    """Send a file from the built React app with the right caching policy."""
+    response = send_from_directory(FRONTEND_BUILD, path)
+    response.headers["Cache-Control"] = cache_control
+    return response
+
+
+def _looks_like_asset(path):
+    """True for paths such as static/css/main.abc.css (a file, not a route)."""
+    return "." in path.rsplit("/", 1)[-1]
+
+
 def _serve_frontend(path=""):
     """Serve the built React app (SPA fallback) or a helpful status page."""
     path = (path or "").lstrip("/")
@@ -153,14 +171,25 @@ def _serve_frontend(path=""):
                 os.path.join(build_root, path.replace("/", os.sep))
             )
             if target.startswith(build_root + os.sep) and os.path.isfile(target):
-                return send_from_directory(FRONTEND_BUILD, path)
+                cache = (
+                    ASSET_CACHE_CONTROL
+                    if path.startswith("static/")
+                    else SHELL_CACHE_CONTROL
+                )
+                return _build_response(path, cache)
             if path == "favicon.ico":
                 return "", 204
+            # A missing script/style/font must fail loudly: answering with
+            # index.html makes the browser reject it and hides a broken deploy.
+            if _looks_like_asset(path):
+                return "", 404
         index = os.path.join(FRONTEND_BUILD, "index.html")
         if os.path.isfile(index):
-            return send_from_directory(FRONTEND_BUILD, "index.html")
+            return _build_response("index.html", SHELL_CACHE_CONTROL)
     if path == "favicon.ico":
         return "", 204
+    if _looks_like_asset(path):
+        return "", 404
     return (
         "<!doctype html><html><body style='font-family:sans-serif;background:#1e1e2f;"
         "color:#f0f0f0;display:flex;align-items:center;justify-content:center;"
@@ -168,7 +197,9 @@ def _serve_frontend(path=""):
         "<div><h2>VSS Admin — backend radi ✓</h2>"
         "<p>Frontend nije pronađen u <code>frontend/build</code>.</p>"
         "<p>Pokreni <code>npm run build</code> u frontend/ (pa restartuj backend) ili "
-        "<code>npm start</code> i otvori http://localhost:3000.</p></div></body></html>"
+        "<code>npm start</code> i otvori http://localhost:3000.</p></div></body></html>",
+        200,
+        {"Cache-Control": SHELL_CACHE_CONTROL},
     )
 
 
