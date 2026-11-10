@@ -1,103 +1,176 @@
-import React, { useState, useEffect } from "react";
-import MetadataForm from "./components/MetadataForm";
-import MarkdownEditor from "./components/MarkdownEditor";
-import Preview from "./components/Preview";
-import slugify from "./utils/slugify";
-import generateFrontMatter from "./utils/generateFrontMatter";
+import React, { useEffect, useState } from "react";
+import Login from "./components/Login";
+import { api, getToken, onPendingChanged, setToken } from "./api";
 
-const Login = ({ onLogin }) => {
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
+import Dashboard from "./views/Dashboard";
+import Activities from "./views/Activities";
+import ActivityEditor from "./views/ActivityEditor";
+import Media from "./views/Media";
+import Board from "./views/Board";
+import Documents from "./views/Documents";
+import Pages from "./views/Pages";
+import Settings from "./views/Settings";
+import PendingChanges from "./views/PendingChanges";
+import History from "./views/History";
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const apiUrl = process.env.REACT_APP_API_URL;
-
-        try {
-            const res = await fetch(`${apiUrl}/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await res.json();
-            if (data.success) onLogin();
-            else setError(data.error || "Login failed");
-        } catch {
-            setError("Cannot reach server");
-        }
-    };
-
-    return (
-        <div className="login-container">
-            <h2>Login</h2>
-            <form onSubmit={handleSubmit}>
-                <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                <button type="submit">Login</button>
-            </form>
-            {error && <p style={{ color: "red" }}>{error}</p>}
-        </div>
-    );
-};
+const NAV = [
+  { key: "dashboard", label: "Pregled", icon: "▦" },
+  { key: "activities", label: "Aktivnosti", icon: "☰" },
+  { key: "media", label: "Fotografije", icon: "▣" },
+  { key: "board", label: "Odbor", icon: "☺" },
+  { key: "documents", label: "Dokumenta", icon: "▤" },
+  { key: "pages", label: "Stranice", icon: "▥" },
+  { key: "settings", label: "Postavke", icon: "⚙" },
+  { key: "history", label: "Istorija", icon: "↺" },
+  { key: "pending", label: "Preview & Commit", icon: "✓" },
+];
 
 function App() {
-    const [loggedIn, setLoggedIn] = useState(false);
-    const [meta, setMeta] = useState({
-        title: "",
-        description: "",
-        date: new Date().toISOString().slice(0, 10),
-        slug: "",
-        image: "",
-        tags: "",
-        categories: ""
-    });
-    const [content, setContent] = useState("");
+  const [loggedIn, setLoggedIn] = useState(!!getToken());
+  const [view, setView] = useState("dashboard");
+  const [editing, setEditing] = useState(null); // {section, filename} | {section, new:true}
+  const [pendingCount, setPendingCount] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
 
-    useEffect(() => setMeta(prev => ({ ...prev, slug: slugify(prev.title) })), [meta.title]);
+  const refreshPending = async () => {
+    if (!getToken()) return;
+    try {
+      const data = await api("/api/pending");
+      setPendingCount((data.ops || []).length);
+    } catch {
+      setPendingCount(0);
+    }
+  };
 
-    const handleSave = async () => {
-        const frontmatter = generateFrontMatter(meta);
-        const payload = {
-            slug: meta.slug,
-            front: frontmatter,
-            content,
-            image: meta.image
-        };
+  useEffect(() => {
+    if (loggedIn) refreshPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn, view]);
 
-        const apiUrl = process.env.REACT_APP_API_URL;
-        try {
-            const res = await fetch(`${apiUrl}/save`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
+  useEffect(() => {
+    const off = onPendingChanged(refreshPending);
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-            if (res.ok) alert("Sačuvano!");
-            else {
-                const err = await res.json();
-                alert("Error: " + (err.error || "Unknown error"));
-            }
-        } catch {
-            alert("Cannot reach server");
-        }
-    };
-
-    if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
-
+  if (!loggedIn) {
     return (
-        <div className="app-grid">
-            <h1>HUGO BLOG EDITOR</h1>
-            <MetadataForm meta={meta} setMeta={setMeta} />
-            <MarkdownEditor meta={meta} content={content} setContent={setContent} />
-            <Preview content={content} />
-            <button className="save-button" onClick={handleSave}>Save</button>
-            <footer>
-                &copy; {new Date().getFullYear()} <a href="https://github.com/Kiconii13" target="_blank" rel="noreferrer">Kiconii13</a> All rights reserved.
-            </footer>
-        </div>
+      <Login
+        onLogin={(token) => {
+          setToken(token);
+          setLoggedIn(true);
+        }}
+      />
     );
+  }
+
+  const openEditor = (entity) => {
+    setEditing(entity);
+    setView("editor");
+    setSidebarOpen(false);
+  };
+
+  const navigate = (key) => {
+    setView(key);
+    setSidebarOpen(false);
+  };
+
+  const logout = () => {
+    setToken("");
+    setLoggedIn(false);
+    setSidebarOpen(false);
+  };
+
+  const renderView = () => {
+    switch (view) {
+      case "dashboard":
+        return <Dashboard onNavigate={setView} onNewActivity={() => openEditor({ section: "events", filename: null })} />;
+      case "activities":
+        return (
+          <Activities
+            onEdit={(e) => openEditor(e)}
+            onNew={(section) => openEditor({ section, filename: null })}
+          />
+        );
+      case "editor":
+        return <ActivityEditor editing={editing} onDone={() => { setEditing(null); setView("activities"); }} onGoPending={() => setView("pending")} />;
+      case "media":
+        return <Media />;
+      case "board":
+        return <Board />;
+      case "documents":
+        return <Documents />;
+      case "pages":
+        return <Pages />;
+      case "settings":
+        return <Settings />;
+      case "pending":
+        return <PendingChanges />;
+      case "history":
+        return <History />;
+      default:
+        return <Dashboard onNavigate={setView} onNewActivity={() => openEditor({ section: "events", filename: null })} />;
+    }
+  };
+
+  return (
+    <div className="admin-shell">
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
+        <button
+          className="sidebar-close"
+          aria-label="Zatvori meni"
+          onClick={() => setSidebarOpen(false)}
+        >
+          ✕
+        </button>
+        <div className="admin-brand">
+          <strong>VSS Admin</strong>
+          <span>Hugo blog editor</span>
+        </div>
+        <nav>
+          {NAV.map((item) => (
+            <button
+              key={item.key}
+              className={view === item.key ? "nav-item active" : "nav-item"}
+              onClick={() => navigate(item.key)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+              {item.key === "pending" && pendingCount > 0 && (
+                <span className="badge">{pendingCount}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="nav-item primary"
+          onClick={() => openEditor({ section: "events", filename: null })}
+        >
+          <span className="nav-icon">＋</span>
+          <span>Nova aktivnost</span>
+        </button>
+        <div className="admin-sidebar-footer">
+          <button className="link-button" onClick={logout}>
+            Odjavi se
+          </button>
+        </div>
+      </aside>
+      <main className="admin-main">
+        <div className="admin-topbar">
+          <button
+            className="menu-toggle"
+            aria-label="Otvori meni"
+            onClick={() => setSidebarOpen(true)}
+          >
+            ☰
+          </button>
+          <span className="topbar-title">VSS Admin</span>
+        </div>
+        {renderView()}
+      </main>
+    </div>
+  );
 }
 
 export default App;

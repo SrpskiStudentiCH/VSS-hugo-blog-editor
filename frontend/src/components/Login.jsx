@@ -1,34 +1,40 @@
 import React, { useState } from "react";
+import { login } from "../api";
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const apiUrl = process.env.REACT_APP_API_URL;
-
-    const res = await fetch(`${apiUrl}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-    if (data.success) onLogin();
-    else setError(data.error || "Login failed");
+    setBusy(true);
+    setError("");
+    try {
+      const data = await login(username, password);
+      if (data.success) onLogin(data.token);
+      else setError(data.error || "Login failed");
+    } catch (err) {
+      setError(err.message || "Cannot reach server");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="login-container">
-      <h2>Login</h2>
-      <form onSubmit={handleSubmit}>
-        <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button type="submit">Login</button>
-      </form>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <div className="login-card">
+        <h2>VSS Admin — prijava</h2>
+        <form onSubmit={handleSubmit}>
+          <label>Korisničko ime</label>
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+          <label>Lozinka</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="submit" disabled={busy}>{busy ? "Prijava..." : "Prijavi se"}</button>
+        </form>
+        {error && <p className="error-text">{error}</p>}
+      </div>
     </div>
   );
 };
