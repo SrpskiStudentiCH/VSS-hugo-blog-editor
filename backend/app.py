@@ -63,6 +63,14 @@ def _allowed_origins():
 
 CORS(app, origins=_allowed_origins())
 
+# Fonts (Font Awesome bundle) must be served with a real font MIME type; some
+# platforms (notably Windows) guess none and fall back to octet-stream.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+mimetypes.add_type("font/ttf", ".ttf")
+mimetypes.add_type("font/otf", ".otf")
+mimetypes.add_type("application/vnd.ms-fontobject", ".eot")
+
 # ----------------------------------------------------------------- config
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 REPO_OWNER = os.environ.get("REPO_OWNER")
