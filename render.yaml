@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: vss-blog-editor
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: BRANCH
+        value: main
+      # Secrets: vrednosti se unose u Render dashboard-u (sync: false).
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: REPO_OWNER
+        sync: false
+      - key: REPO_NAME
+        sync: false
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASS
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

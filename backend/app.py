@@ -164,6 +164,12 @@ def _serve_frontend(path=""):
     )
 
 
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    """Liveness probe: no auth, no upstream calls (used by Render health checks)."""
+    return jsonify({"status": "ok"})
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def spa_fallback(path):

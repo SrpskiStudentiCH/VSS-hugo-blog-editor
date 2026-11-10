@@ -7,7 +7,6 @@ node_modules/
 /build/
 /dist/
 /coverage/
-build/
 
 # ==============================
 # Backend / Python
@@ -81,3 +80,4 @@ logs/
 # ==============================
 /out/
 /next/
+*.bak

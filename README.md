@@ -99,8 +99,8 @@ Frontend: `REACT_APP_API_URL` (npr. `http://localhost:5000`).
 - `.env` nikad ne ide u git; `GITHUB_TOKEN` i `TRANSLATION_API_KEY` ostaju samo
   na serveru (greške prevodioca maskiraju ključ).
 - Sesije i pending izmene se drže u memoriji procesa — drži **jedan** gunicorn
-  worker (`gunicorn app:app`, kako je u `Procfile`); uz više workera sesije se
-  gube između zahteva.
+  worker (`--workers 1`, kako je u `render.yaml`/`Procfile`); uz više workera
+  sesije se gube između zahteva.
 
 ## Pokretanje
 
@@ -111,6 +111,41 @@ cd backend && pip install -r requirements.txt && python app.py
 # frontend
 cd frontend && npm install && npm start
 ```
+
+## Deployment (Render)
+
+Repo sadrži `render.yaml` (blueprint) sa ispravnim podešavanjima. Ako servis
+pravite/popravljate ručno u dashboard-u, postavite:
+
+| Polje | Vrednost |
+|---|---|
+| Runtime | **Python 3** |
+| Root Directory | `backend` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120` |
+| Health Check Path | `/api/health` |
+| Python verzija | `.python-version` u repou (`3.12`); alternativa: env `PYTHON_VERSION=3.12.5` |
+
+Ako je Root Directory repo root (a ne `backend`), Start Command je
+`gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120` — root
+`wsgi.py` dodaje `backend/` na `sys.path`.
+
+Env promenljive (`GITHUB_TOKEN`, `REPO_OWNER`, `REPO_NAME`, `BRANCH`,
+`ADMIN_USER`, `ADMIN_PASS`, opciono `ALLOWED_ORIGINS`) unose se u dashboard;
+`backend/.env` se u produkciji ne koristi.
+
+React admin UI se servira iz istog Flask procesa (`frontend/build`), pa je
+build **commit-ovan** — posle svake izmene frontenda pokreni
+`cd frontend && npm run build` i commit-uj `frontend/build` (source mape se ne
+commituju). Bez build-a Flask vraća samo status stranicu „Frontend nije
+pronađen“.
+
+**Zašto je deploy pao sa `ModuleNotFoundError: No module named
+'your_application'`?** Render tada pokreće svoju *default* start komandu
+(`gunicorn your_application.wsgi`) jer Start Command nije podešen. `Procfile`
+je Heroku-only i Render ga ne čita, pa Start Command mora da postoji u
+`render.yaml` ili u dashboard-u. Posle deploy-a proveri `GET /api/health`
+(očekivano `{"status": "ok"}`) i otvori `/` (mora da se učita admin UI).
 
 ## Testovi
 

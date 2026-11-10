@@ -148,6 +148,11 @@ class TestCorsAndHeaders(unittest.TestCase):
     def setUp(self):
         self.client = app_module.app.test_client()
 
+    def test_health_check_is_public(self):
+        resp = self.client.get("/api/health")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {"status": "ok"})
+
     def test_cors_rejects_unknown_origin(self):
         resp = self.client.get("/api/file", headers={"Origin": "http://evil.example"})
         self.assertIsNone(resp.headers.get("Access-Control-Allow-Origin"))
